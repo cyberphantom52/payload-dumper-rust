@@ -3,8 +3,8 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 use crate::constants::*;
+use crate::error::{Error, Result};
 use crate::zip::zip_io::ZipIO;
-use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub struct ZipEntry {
@@ -67,8 +67,9 @@ impl ZipParser {
             }
         }
 
-        let eocd_offset =
-            eocd_pos.ok_or_else(|| anyhow!("Could not find End of Central Directory record"))?;
+        let eocd_offset = eocd_pos.ok_or_else(|| {
+            Error::InvalidZip("Could not find End of Central Directory record".into())
+        })?;
 
         // read number of entries
         let mut num_entries_buf = [0u8; 2];
@@ -81,7 +82,7 @@ impl ZipParser {
     /// read ZIP64 EOCD information
     pub async fn read_zip64_eocd<I: ZipIO>(io: &I, eocd_offset: u64) -> Result<(u64, u64)> {
         if eocd_offset < 20 {
-            return Err(anyhow!("Invalid ZIP64 structure"));
+            return Err(Error::InvalidZip("Invalid ZIP64 structure".into()));
         }
 
         let search_start = eocd_offset.saturating_sub(20);
@@ -113,8 +114,8 @@ impl ZipParser {
         }
 
         if !found_locator {
-            return Err(anyhow!(
-                "ZIP64 format indicated but ZIP64 EOCD locator not found"
+            return Err(Error::InvalidZip(
+                "ZIP64 format indicated but ZIP64 EOCD locator not found".into(),
             ));
         }
 
@@ -122,7 +123,7 @@ impl ZipParser {
         io.read_at(zip64_eocd_offset, &mut zip64_eocd).await?;
 
         if zip64_eocd[0..4] != ZIP64_EOCD_SIGNATURE {
-            return Err(anyhow!("Invalid ZIP64 EOCD signature"));
+            return Err(Error::InvalidZip("Invalid ZIP64 EOCD signature".into()));
         }
 
         let cd_offset = u64::from_le_bytes([
@@ -175,7 +176,9 @@ impl ZipParser {
         io.read_at(offset, &mut entry_header).await?;
 
         if entry_header[0..4] != CENTRAL_DIR_HEADER_SIGNATURE {
-            return Err(anyhow!("Invalid central directory header signature"));
+            return Err(Error::InvalidZip(
+                "Invalid central directory header signature".into(),
+            ));
         }
 
         let compression_method = u16::from_le_bytes([entry_header[10], entry_header[11]]);
@@ -308,9 +311,7 @@ impl ZipParser {
             }
         }
 
-        Err(anyhow!(
-            "Could not find uncompressed payload.bin in ZIP file"
-        ))
+        Err(Error::PayloadNotFound)
     }
 
     /// calculate the actual data offset for a ZIP entry (after local header)
@@ -319,14 +320,16 @@ impl ZipParser {
         io.read_at(entry.offset, &mut local_header).await?;
 
         if local_header[0..4] != LOCAL_FILE_HEADER_SIGNATURE {
-            return Err(anyhow!("Invalid local file header signature"));
+            return Err(Error::InvalidZip(
+                "Invalid local file header signature".into(),
+            ));
         }
 
         // double-check compression method in local header
         let local_compression = u16::from_le_bytes([local_header[8], local_header[9]]);
         if local_compression != 0 {
-            return Err(anyhow!(
-                "payload.bin is compressed, expected uncompressed (STORED)"
+            return Err(Error::InvalidZip(
+                "payload.bin is compressed, expected uncompressed (STORED)".into(),
             ));
         }
 
@@ -343,8 +346,8 @@ impl ZipParser {
         io.read_at(offset, &mut magic).await?;
 
         if &magic != PAYLOAD_MAGIC {
-            return Err(anyhow!(
-                "Invalid payload file: magic 'CrAU' not found at calculated offset"
+            return Err(Error::InvalidPayload(
+                "magic 'CrAU' not found at calculated offset".into(),
             ));
         }
 
@@ -648,7 +651,11 @@ mod tests {
                 .map(|end| end <= self.data.len())
                 != Some(true)
             {
-                return Err(anyhow!("Read out of bounds"));
+                return Err(Error::OutOfBounds {
+                    offset: offset as u64,
+                    length: buf.len() as u64,
+                    size: self.data.len() as u64,
+                });
             }
             buf.copy_from_slice(&self.data[offset..offset + buf.len()]);
             Ok(())

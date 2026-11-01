@@ -2,10 +2,10 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
+use crate::error::Result;
 use crate::structs::*;
 use crate::utils::format_size;
 use ahash::{AHashMap as HashMap, AHashSet as HashSet};
-use anyhow::Result;
 
 pub async fn get_metadata(
     manifest: &DeltaArchiveManifest,

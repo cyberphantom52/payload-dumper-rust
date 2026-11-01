@@ -3,7 +3,7 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 #![allow(dead_code)]
-use anyhow::{Result, anyhow};
+use crate::error::{Error, Result};
 use async_compression::tokio::bufread::{BzDecoder, XzDecoder, ZstdDecoder};
 use async_trait::async_trait;
 use std::path::PathBuf;
@@ -319,18 +319,16 @@ async fn process_operation_streaming(
                     // Update position after diff operation
                     ctx.current_pos = ctx.out_file.stream_position().await?;
                 } else {
-                    return Err(anyhow!(
-                        "Operation {} is a differential OTA operation but source directory not provided. Use --source-dir option.",
-                        operation_index
-                    ));
+                    return Err(Error::SourceRequired {
+                        partition: partition_name.to_string(),
+                    });
                 }
             }
             #[cfg(not(feature = "diff_ota"))]
             {
-                return Err(anyhow!(
-                    "Operation {} is a differential OTA operation. Rebuild with 'diff_ota' feature enabled to support incremental OTAs.",
-                    operation_index
-                ));
+                return Err(Error::DiffNotSupported {
+                    partition: partition_name.to_string(),
+                });
             }
         }
         _ => {
@@ -382,19 +380,15 @@ pub async fn dump_partition<P: AsyncPayloadRead>(
             let source_img_path = diff_ctx.source_dir.join(format!("{}.img", partition_name));
 
             if !source_img_path.exists() {
-                return Err(anyhow!(
-                    "Differential OTA requires source image: {} not found",
-                    source_img_path.display()
-                ));
+                return Err(Error::SourceImageNotFound(source_img_path));
             }
 
             let source_file = File::open(&source_img_path).await?;
             (Some(diff_ctx), Some(source_file))
         } else {
-            return Err(anyhow!(
-                "Partition '{}' contains differential operations but no source directory provided.",
-                partition_name
-            ));
+            return Err(Error::SourceRequired {
+                partition: partition_name.to_string(),
+            });
         }
     } else {
         (None, None)
@@ -402,10 +396,9 @@ pub async fn dump_partition<P: AsyncPayloadRead>(
 
     #[cfg(not(feature = "diff_ota"))]
     if has_diff_ops && source_dir.is_none() {
-        return Err(anyhow!(
-            "Partition '{}' contains differential operations. Rebuild with 'diff_ota' feature or provide source directory.",
-            partition_name
-        ));
+        return Err(Error::DiffNotSupported {
+            partition: partition_name.to_string(),
+        });
     }
 
     let mut out_file = File::create(&output_path).await?;
@@ -414,7 +407,7 @@ pub async fn dump_partition<P: AsyncPayloadRead>(
         if let Some(size) = info.size {
             out_file.set_len(size).await?;
         } else {
-            return Err(anyhow!("Partition size is missing"));
+            return Err(Error::InvalidPayload("partition size is missing".into()));
         }
     }
 
@@ -443,7 +436,7 @@ pub async fn dump_partition<P: AsyncPayloadRead>(
     for (i, op) in partition.operations.iter().enumerate() {
         // Check for cancellation before processing each operation
         if reporter.is_cancelled() {
-            return Err(anyhow!("Extraction cancelled by user"));
+            return Err(Error::Cancelled);
         }
 
         process_operation_streaming(i, op, &mut ctx, reporter, partition_name).await?;

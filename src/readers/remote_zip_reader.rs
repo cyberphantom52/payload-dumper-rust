@@ -2,10 +2,10 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
+use crate::error::{Error, Result};
 use crate::http::HttpReader;
 use crate::payload::payload_dumper::{AsyncPayloadRead, PayloadReader};
 use crate::zip::core_parser::ZipParser;
-use anyhow::Result;
 use async_trait::async_trait;
 use futures::StreamExt;
 use std::pin::Pin;
@@ -64,12 +64,11 @@ impl PayloadReader for RemotePayloadReader {
         let absolute_offset = self.payload_offset + offset;
 
         if absolute_offset + length > self.payload_offset + self.payload_size {
-            return Err(anyhow::anyhow!(
-                "Read request exceeds payload bounds: offset={}, length={}, payload_size={}",
+            return Err(Error::OutOfBounds {
                 offset,
                 length,
-                self.payload_size
-            ));
+                size: self.payload_size,
+            });
         }
 
         let end = absolute_offset + length - 1;
@@ -84,10 +83,7 @@ impl PayloadReader for RemotePayloadReader {
             .await?;
 
         if !response.status().is_success() && response.status().as_u16() != 206 {
-            return Err(anyhow::anyhow!(
-                "Range request failed: {}",
-                response.status()
-            ));
+            return Err(Error::HttpStatus(response.status().as_u16()));
         }
 
         // convert response to AsyncRead stream

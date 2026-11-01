@@ -3,6 +3,7 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 use crate::constants::{PAYLOAD_MAGIC, SUPPORTED_PAYLOAD_VERSION};
+use crate::error::{Error, Result};
 #[cfg(feature = "remote_zip")]
 use crate::http::HttpReader;
 use crate::structs::DeltaArchiveManifest;
@@ -10,7 +11,6 @@ use crate::structs::DeltaArchiveManifest;
 use crate::zip::core_parser::{ZipMetadataInfo, ZipParser};
 #[cfg(feature = "local_zip")]
 use crate::zip::local_zip_io::LocalZipIO;
-use anyhow::{Result, anyhow};
 use prost::Message;
 #[cfg(feature = "local_zip")]
 use std::path::PathBuf;
@@ -32,13 +32,13 @@ where
     let mut magic = [0u8; 4];
     reader.read_exact(&mut magic).await?;
     if &magic != PAYLOAD_MAGIC {
-        return Err(anyhow!("Invalid payload file: magic 'CrAU' not found"));
+        return Err(Error::InvalidPayload("magic 'CrAU' not found".into()));
     }
 
     // read and validate version
     let version = reader.read_u64().await?;
     if version != SUPPORTED_PAYLOAD_VERSION {
-        return Err(anyhow!("Unsupported payload version: {}", version));
+        return Err(Error::UnsupportedVersion(version));
     }
 
     // read sizes
@@ -93,7 +93,7 @@ pub async fn parse_remote_payload_ext(
     let mut magic = [0u8; 4];
     read_at(&http_reader, &mut pos, &mut magic).await?;
     if &magic != PAYLOAD_MAGIC {
-        return Err(anyhow!("Invalid payload file: magic 'CrAU' not found"));
+        return Err(Error::InvalidPayload("magic 'CrAU' not found".into()));
     }
 
     // read and validate version
@@ -101,7 +101,7 @@ pub async fn parse_remote_payload_ext(
     read_at(&http_reader, &mut pos, &mut buf).await?;
     let version = u64::from_be_bytes(buf);
     if version != SUPPORTED_PAYLOAD_VERSION {
-        return Err(anyhow!("Unsupported payload version: {}", version));
+        return Err(Error::UnsupportedVersion(version));
     }
 
     // read manifest size
@@ -304,7 +304,7 @@ pub async fn parse_remote_bin_payload(
     let mut magic = [0u8; 4];
     read_at(&http_reader, &mut pos, &mut magic).await?;
     if &magic != PAYLOAD_MAGIC {
-        return Err(anyhow!("Invalid payload file: magic 'CrAU' not found"));
+        return Err(Error::InvalidPayload("magic 'CrAU' not found".into()));
     }
 
     // Read and validate version
@@ -312,7 +312,7 @@ pub async fn parse_remote_bin_payload(
     read_at(&http_reader, &mut pos, &mut buf).await?;
     let version = u64::from_be_bytes(buf);
     if version != SUPPORTED_PAYLOAD_VERSION {
-        return Err(anyhow!("Unsupported payload version: {}", version));
+        return Err(Error::UnsupportedVersion(version));
     }
 
     // Read manifest size

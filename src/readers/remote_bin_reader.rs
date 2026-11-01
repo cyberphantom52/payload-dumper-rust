@@ -8,9 +8,9 @@
  * Still, we include support for this to maintain compatibility and consistency.
  */
 
+use crate::error::{Error, Result};
 use crate::http::HttpReader;
 use crate::payload::payload_dumper::{AsyncPayloadRead, PayloadReader};
-use anyhow::Result;
 use async_trait::async_trait;
 use futures::StreamExt;
 use std::pin::Pin;
@@ -69,10 +69,7 @@ impl PayloadReader for RemoteBinPayloadReader {
             .await?;
 
         if !response.status().is_success() && response.status().as_u16() != 206 {
-            return Err(anyhow::anyhow!(
-                "Range request failed: {}",
-                response.status()
-            ));
+            return Err(Error::HttpStatus(response.status().as_u16()));
         }
 
         let stream = response.bytes_stream();

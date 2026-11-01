@@ -2,8 +2,8 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
+use crate::error::Result;
 use crate::zip::zip_io::ZipIO;
-use anyhow::Result;
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::sync::Arc;

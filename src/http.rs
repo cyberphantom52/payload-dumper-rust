@@ -4,7 +4,7 @@
 
 #![allow(unused)]
 use crate::constants::DEFAULT_USER_AGENT;
-use anyhow::{Result, anyhow};
+use crate::error::{Error, Result, ResultExt};
 use futures_util::StreamExt;
 use reqwest::{Client, header};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,16 +36,14 @@ async fn get_or_init_dns_resolver(
 
     let config = if let Some(dns_str) = dns_source {
         // parse custom DNS servers (comma-separated, for example., "8.8.8.8,8.8.4.4")
-        let dns_ips: Result<Vec<_>> = dns_str
+        let dns_ips = dns_str
             .split(',')
             .map(|s| s.trim().parse::<std::net::IpAddr>())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| anyhow!("Invalid DNS IP: {}", e));
-
-        let dns_ips = dns_ips?;
+            .map_err(|e| Error::Config(format!("Invalid DNS IP: {}", e)))?;
 
         if dns_ips.is_empty() {
-            return Err(anyhow!("DNS configuration is empty"));
+            return Err(Error::Config("DNS configuration is empty".into()));
         }
 
         // Create config with custom DNS servers
@@ -59,8 +57,9 @@ async fn get_or_init_dns_resolver(
         ResolverConfig::udp_and_tcp(&CLOUDFLARE)
     };
 
-    let resolver =
-        Resolver::builder_with_config(config, TokioRuntimeProvider::default()).build()?;
+    let resolver = Resolver::builder_with_config(config, TokioRuntimeProvider::default())
+        .build()
+        .map_err(|e| Error::Config(format!("Failed to create DNS resolver: {}", e)))?;
 
     let resolver = Arc::new(resolver);
 
@@ -80,7 +79,7 @@ fn build_tls_config() -> Result<rustls::ClientConfig> {
 
     let builder = rustls::ClientConfig::builder_with_provider(Arc::clone(&provider))
         .with_safe_default_protocol_versions()
-        .map_err(|e| anyhow!("Failed to configure TLS: {}", e))?;
+        .map_err(|e| Error::Config(format!("Failed to configure TLS: {}", e)))?;
 
     // on android, rustls platform verifier requires JNI init with a JavaVM
     // context which isn't available in standalone CLI binaries (e.g. Termux)
@@ -96,8 +95,12 @@ fn build_tls_config() -> Result<rustls::ClientConfig> {
 
     #[cfg(not(all(target_os = "android", feature = "android-webpki-roots")))]
     let builder = {
-        let verifier = rustls_platform_verifier::Verifier::new(provider)
-            .map_err(|e| anyhow!("Failed to load platform certificate verifier: {}", e))?;
+        let verifier = rustls_platform_verifier::Verifier::new(provider).map_err(|e| {
+            Error::Config(format!(
+                "Failed to load platform certificate verifier: {}",
+                e
+            ))
+        })?;
         builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(verifier))
@@ -121,7 +124,7 @@ async fn create_http_client(
     headers.insert(
         header::USER_AGENT,
         header::HeaderValue::from_str(ua)
-            .map_err(|e| anyhow!("Invalid user agent string: {}", e))?,
+            .map_err(|e| Error::Config(format!("Invalid user agent string: {}", e)))?,
     );
 
     if let Some(cookie_str) = cookies
@@ -130,7 +133,7 @@ async fn create_http_client(
         headers.insert(
             header::COOKIE,
             header::HeaderValue::from_str(cookie_str)
-                .map_err(|e| anyhow!("Invalid cookie string: {}", e))?,
+                .map_err(|e| Error::Config(format!("Invalid cookie string: {}", e)))?,
         );
     }
 
@@ -181,16 +184,14 @@ async fn create_http_client(
             }
         }
 
-        let resolver = get_or_init_dns_resolver(dns)
-            .await
-            .map_err(|e| anyhow!("Failed to create DNS resolver: {}", e))?;
+        let resolver = get_or_init_dns_resolver(dns).await?;
 
         client_builder = client_builder.dns_resolver(Arc::new(CustomDnsResolver { resolver }));
     }
 
     client_builder
         .build()
-        .map_err(|e| anyhow!("Failed to create HTTP client: {}", e))
+        .context("Failed to create HTTP client")
 }
 
 /// async HTTP reader with range request support
@@ -210,7 +211,7 @@ impl HttpReader {
         let client = create_http_client(user_agent, cookies, dns).await?;
 
         // validate URL
-        reqwest::Url::parse(&url).map_err(|e| anyhow!("Invalid URL: {}", e))?;
+        reqwest::Url::parse(&url).map_err(|e| Error::Config(format!("Invalid URL: {}", e)))?;
 
         // head request with retries
         let mut retry_count = 0;
@@ -221,7 +222,7 @@ impl HttpReader {
             match client.head(&url).send().await {
                 Ok(response) => {
                     if !response.status().is_success() {
-                        return Err(anyhow!("Failed to access URL: {}", response.status()));
+                        return Err(Error::HttpStatus(response.status().as_u16()));
                     }
 
                     // check range support
@@ -237,10 +238,12 @@ impl HttpReader {
                         .get(header::CONTENT_LENGTH)
                         .and_then(|v| v.to_str().ok())
                         .and_then(|v| v.parse::<u64>().ok())
-                        .ok_or_else(|| anyhow!("Could not determine content length"))?;
+                        .ok_or_else(|| {
+                            Error::BadResponse("Could not determine content length".into())
+                        })?;
 
                     if content_length == 0 {
-                        return Err(anyhow!("File size is 0"));
+                        return Err(Error::BadResponse("File size is 0".into()));
                     }
 
                     return Ok(Self {
@@ -259,21 +262,20 @@ impl HttpReader {
             }
         }
 
-        Err(anyhow!(
-            "Failed to connect after {} retries. Last error: {}",
-            MAX_RETRIES,
-            last_error.unwrap()
-        ))
+        Err(Error::Context {
+            context: format!("Failed to connect after {} retries", MAX_RETRIES),
+            source: Box::new(last_error.expect("loop ran at least once").into()),
+        })
     }
 
     /// read exact bytes at specific offset
     pub async fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<()> {
         if offset >= self.content_length {
-            return Err(anyhow!(
-                "Offset {} exceeds content length {}",
+            return Err(Error::OutOfBounds {
                 offset,
-                self.content_length
-            ));
+                length: buf.len() as u64,
+                size: self.content_length,
+            });
         }
 
         // clamp the read to available bytes
@@ -303,7 +305,7 @@ impl HttpReader {
                 Ok(response) => {
                     let status = response.status();
                     if !status.is_success() && status.as_u16() != 206 {
-                        return Err(anyhow!("Range request failed: {}", status));
+                        return Err(Error::HttpStatus(status.as_u16()));
                     }
 
                     let mut stream = response.bytes_stream();
@@ -316,11 +318,11 @@ impl HttpReader {
 
                                 // prevent buffer overflow
                                 if pos + chunk_len > to_read {
-                                    return Err(anyhow!(
+                                    return Err(Error::BadResponse(format!(
                                         "Server returned too much data: expected {}, got {} so far",
                                         to_read,
                                         pos + chunk_len
-                                    ));
+                                    )));
                                 }
 
                                 buf[pos..pos + chunk_len].copy_from_slice(&chunk);
@@ -345,11 +347,10 @@ impl HttpReader {
                         }
                     } else {
                         // stream ended early without error
-                        return Err(anyhow!(
+                        return Err(Error::BadResponse(format!(
                             "Server returned incomplete data: expected {}, got {}",
-                            to_read,
-                            pos
-                        ));
+                            to_read, pos
+                        )));
                     }
                 }
                 Err(e) => {
@@ -362,11 +363,10 @@ impl HttpReader {
             }
         }
 
-        Err(anyhow!(
-            "Failed to read after {} retries. Last error: {}",
-            MAX_RETRIES,
-            last_error.unwrap()
-        ))
+        Err(Error::Context {
+            context: format!("Failed to read after {} retries", MAX_RETRIES),
+            source: Box::new(last_error.expect("loop ran at least once").into()),
+        })
     }
 }
 

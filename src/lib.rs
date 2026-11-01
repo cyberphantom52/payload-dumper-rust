@@ -3,6 +3,7 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 pub mod constants;
+pub mod error;
 #[cfg(feature = "remote_zip")]
 pub mod http;
 pub mod metadata;

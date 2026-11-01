@@ -2,7 +2,7 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
-use anyhow::Result;
+use crate::error::Result;
 use async_trait::async_trait;
 
 /// abstract I/O trait for reading ZIP files from any source

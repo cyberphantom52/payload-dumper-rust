@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2025 rhythmcache
 
-use anyhow::{Context, Result, anyhow};
+use crate::error::{Error, Result, ResultExt};
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -34,10 +34,10 @@ impl DiffContext {
             .sum();
 
         if total_size > MAX_OPERATION_SIZE as u64 {
-            return Err(anyhow!(
+            return Err(Error::InvalidPayload(format!(
                 "Source extents total size {} exceeds safety limit",
                 total_size
-            ));
+            )));
         }
 
         let mut data = Vec::with_capacity(total_size as usize);
@@ -52,11 +52,11 @@ impl DiffContext {
 
             let offset = start_block
                 .checked_mul(self.block_size)
-                .ok_or_else(|| anyhow!("Offset overflow in extent {}", i))?;
+                .ok_or_else(|| Error::InvalidPayload(format!("Offset overflow in extent {}", i)))?;
 
             let length = num_blocks
                 .checked_mul(self.block_size)
-                .ok_or_else(|| anyhow!("Length overflow in extent {}", i))?;
+                .ok_or_else(|| Error::InvalidPayload(format!("Length overflow in extent {}", i)))?;
 
             source_file
                 .seek(std::io::SeekFrom::Start(offset))
@@ -87,11 +87,11 @@ impl DiffContext {
             .sum();
 
         if data.len() != expected_size as usize {
-            return Err(anyhow!(
+            return Err(Error::InvalidPayload(format!(
                 "Data size mismatch: expected {} bytes, got {} bytes",
                 expected_size,
                 data.len()
-            ));
+            )));
         }
 
         let mut data_offset = 0usize;
@@ -104,19 +104,19 @@ impl DiffContext {
                 continue;
             }
 
-            let offset = start_block
-                .checked_mul(self.block_size)
-                .ok_or_else(|| anyhow!("Offset overflow in dst extent {}", i))?;
+            let offset = start_block.checked_mul(self.block_size).ok_or_else(|| {
+                Error::InvalidPayload(format!("Offset overflow in dst extent {}", i))
+            })?;
 
             let length = (num_blocks * self.block_size) as usize;
 
             if data_offset + length > data.len() {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "Insufficient data for extent {}: need {} bytes, have {} remaining",
                     i,
                     length,
                     data.len() - data_offset
-                ));
+                )));
             }
 
             out_file
@@ -187,7 +187,10 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
             let patch_length = op.data_length.unwrap_or(0);
 
             if patch_length > MAX_OPERATION_SIZE as u64 {
-                return Err(anyhow!("Patch size {} exceeds safety limit", patch_length));
+                return Err(Error::InvalidPayload(format!(
+                    "Patch size {} exceeds safety limit",
+                    patch_length
+                )));
             }
 
             let mut patch_stream = payload_reader
@@ -203,7 +206,7 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
 
             let mut patched_data = Vec::new();
             bsdiff_android::patch_bsdf2(&source_data, &patch_data, &mut patched_data)
-                .map_err(|e| anyhow!("BSDF2 patch failed: {}", e))?;
+                .map_err(|e| Error::Patch(format!("BSDF2 patch failed: {}", e)))?;
 
             let expected_size: u64 = op
                 .dst_extents
@@ -212,11 +215,11 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .sum();
 
             if patched_data.len() != expected_size as usize {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "Patched data size mismatch: expected {} bytes, got {} bytes",
                     expected_size,
                     patched_data.len()
-                ));
+                )));
             }
 
             ctx.write_dst_extents(out_file, &op.dst_extents, &patched_data)
@@ -234,7 +237,10 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
             let patch_length = op.data_length.unwrap_or(0);
 
             if patch_length > MAX_OPERATION_SIZE as u64 {
-                return Err(anyhow!("Patch size {} exceeds safety limit", patch_length));
+                return Err(Error::InvalidPayload(format!(
+                    "Patch size {} exceeds safety limit",
+                    patch_length
+                )));
             }
 
             let mut patch_stream = payload_reader
@@ -249,7 +255,7 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .context("Failed to read patch stream")?;
             let mut patched_data = Vec::new();
             bsdiff_android::patch_bsdf2(&source_data, &patch_data, &mut patched_data)
-                .map_err(|e| anyhow!("BSDF2 patch failed: {}", e))?;
+                .map_err(|e| Error::Patch(format!("BSDF2 patch failed: {}", e)))?;
 
             let expected_size: u64 = op
                 .dst_extents
@@ -258,11 +264,11 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .sum();
 
             if patched_data.len() != expected_size as usize {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "Patched data size mismatch: expected {} bytes, got {} bytes",
                     expected_size,
                     patched_data.len()
-                ));
+                )));
             }
 
             ctx.write_dst_extents(out_file, &op.dst_extents, &patched_data)
@@ -281,10 +287,10 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
             let patch_length = op.data_length.unwrap_or(0);
 
             if patch_length > MAX_OPERATION_SIZE as u64 {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "LZ4DIFF patch size {} exceeds safety limit",
                     patch_length
-                ));
+                )));
             }
 
             let mut patch_stream = payload_reader
@@ -299,7 +305,7 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .context("Failed to read LZ4DIFF patch stream")?;
 
             let patched_data = lz4diff::lz4_patch(&source_data, &patch_data)
-                .map_err(|e| anyhow!("{:?} patch failed: {}", op_type, e))?;
+                .map_err(|e| Error::Patch(format!("{:?} patch failed: {}", op_type, e)))?;
 
             let expected_size: u64 = op
                 .dst_extents
@@ -308,11 +314,11 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .sum();
 
             if patched_data.len() != expected_size as usize {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "Patched data size mismatch: expected {} bytes, got {} bytes",
                     expected_size,
                     patched_data.len()
-                ));
+                )));
             }
 
             ctx.write_dst_extents(out_file, &op.dst_extents, &patched_data)
@@ -330,7 +336,10 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
             let patch_length = op.data_length.unwrap_or(0);
 
             if patch_length > MAX_OPERATION_SIZE as u64 {
-                return Err(anyhow!("Patch size {} exceeds safety limit", patch_length));
+                return Err(Error::InvalidPayload(format!(
+                    "Patch size {} exceeds safety limit",
+                    patch_length
+                )));
             }
 
             let mut patch_stream = payload_reader
@@ -345,7 +354,7 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .context("Failed to read patch stream")?;
 
             let patched_data = puffdiff::puffpatch(&source_data, &patch_data)
-                .map_err(|e| anyhow!("PUFFDIFF patch failed: {}", e))?;
+                .map_err(|e| Error::Patch(format!("PUFFDIFF patch failed: {}", e)))?;
 
             let expected_size: u64 = op
                 .dst_extents
@@ -354,11 +363,11 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 .sum();
 
             if patched_data.len() != expected_size as usize {
-                return Err(anyhow!(
+                return Err(Error::InvalidPayload(format!(
                     "Patched data size mismatch: expected {} bytes, got {} bytes",
                     expected_size,
                     patched_data.len()
-                ));
+                )));
             }
 
             ctx.write_dst_extents(out_file, &op.dst_extents, &patched_data)
@@ -372,14 +381,14 @@ pub async fn process_diff_operation(params: DiffOperationParams<'_>) -> Result<(
                 operation_index,
                 "ZUCCHINI operations not supported yet".to_string(),
             );
-            return Err(anyhow!("ZUCCHINI operation not supported"));
+            return Err(Error::UnsupportedOperation("ZUCCHINI".into()));
         }
 
         _ => {
-            return Err(anyhow!(
+            return Err(Error::UnsupportedOperation(format!(
                 "Operation type {:?} is not a differential operation",
                 op.r#type()
-            ));
+            )));
         }
     }
 

@@ -2,7 +2,7 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
-use anyhow::{Result, anyhow};
+use crate::error::{Error, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -125,7 +125,7 @@ async fn download_partition_data(
         .await?;
 
     if !response.status().is_success() && response.status().as_u16() != 206 {
-        return Err(anyhow!("Range request failed: {}", response.status()));
+        return Err(Error::HttpStatus(response.status().as_u16()));
     }
 
     // Stream chunks as they arrive
@@ -189,11 +189,11 @@ impl PayloadReader for OffsetTranslatingPayloadReader {
         length: u64,
     ) -> Result<Pin<Box<dyn AsyncRead + Send + '_>>> {
         if offset < self.base_offset {
-            return Err(anyhow!(
-                "Offset {} is before base offset {}",
+            return Err(Error::OutOfBounds {
                 offset,
-                self.base_offset
-            ));
+                length,
+                size: self.base_offset,
+            });
         }
 
         let relative_offset = offset - self.base_offset;
@@ -227,8 +227,12 @@ where
     let partition_name = &partition.partition_name;
 
     // calculate the data range needed for this partition
-    let range = calculate_partition_range(partition, config.data_offset)
-        .ok_or_else(|| anyhow!("Partition {} has no data to extract", partition_name))?;
+    let range = calculate_partition_range(partition, config.data_offset).ok_or_else(|| {
+        Error::InvalidPayload(format!(
+            "partition {} has no data to extract",
+            partition_name
+        ))
+    })?;
 
     // download partition data
     download_partition_data(

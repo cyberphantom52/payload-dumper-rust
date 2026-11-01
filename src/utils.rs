@@ -3,8 +3,8 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 use crate::constants::{PAYLOAD_MAGIC, ZIP_MAGIC};
+use crate::error::{Error, Result};
 use crate::structs::install_operation;
-use anyhow::{Result, anyhow};
 use std::time::Duration;
 
 #[derive(Debug, PartialEq)]
@@ -23,10 +23,7 @@ pub fn detect_file(magic: &[u8; 4]) -> Result<FileType> {
         return Ok(FileType::Bin);
     }
 
-    Err(anyhow!(
-        "Magic mismatch: got {:02X?}, expected 'PK' or 'CrAU'",
-        magic
-    ))
+    Err(Error::UnknownFileType(*magic))
 }
 
 pub fn format_elapsed_time(duration: Duration) -> String {
