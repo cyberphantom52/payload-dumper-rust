@@ -15,8 +15,8 @@ fn main() {
     #[cfg(feature = "cli")]
     emit_cli_build_info();
 
-    #[cfg(feature = "remote_zip")]
-    emit_default_user_agent();
+    #[cfg(feature = "cli")]
+    emit_cli_user_agent();
 
     #[cfg(feature = "regen_proto")]
     compile_protos();
@@ -138,8 +138,10 @@ fn emit_cli_build_info() {
     }
 }
 
-#[cfg(feature = "remote_zip")]
-fn emit_default_user_agent() {
+/// browser user agent the CLI sends by default, since some OTA hosts block
+/// unknown clients. the library itself defaults to identifying as payload_dumper
+#[cfg(feature = "cli")]
+fn emit_cli_user_agent() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
     // set platform specific default user agent
@@ -163,7 +165,7 @@ fn emit_default_user_agent() {
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         } // fallback to Linux
     };
-    println!("cargo:rustc-env=DEFAULT_USER_AGENT={}", default_user_agent);
+    println!("cargo:rustc-env=CLI_USER_AGENT={}", default_user_agent);
 }
 
 /// regenerate the protobuf bindings from proto/update_metadata.proto.

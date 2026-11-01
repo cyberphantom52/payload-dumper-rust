@@ -21,7 +21,8 @@ pub const ZIP64_EOCD_SIGNATURE: [u8; 4] = [ZIP_MAGIC[0], ZIP_MAGIC[1], 0x06, 0x0
 pub const ZIP64_EOCD_LOCATOR_SIGNATURE: [u8; 4] = [ZIP_MAGIC[0], ZIP_MAGIC[1], 0x06, 0x07];
 
 #[cfg(feature = "remote_zip")]
-pub const DEFAULT_USER_AGENT: &str = env!("DEFAULT_USER_AGENT");
+/// user agent sent when the caller does not pass one
+pub const DEFAULT_USER_AGENT: &str = concat!("payload_dumper/", env!("CARGO_PKG_VERSION"));
 
 // payload
 pub const PAYLOAD_MAGIC: &[u8; 4] = b"CrAU";

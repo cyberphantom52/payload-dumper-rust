@@ -7,7 +7,7 @@ use clap::Parser;
 use std::time::Instant;
 use tokio::fs;
 
-use crate::cli::args::args_def::Args;
+use crate::cli::args::args_def::{Args, CLI_USER_AGENT};
 use crate::cli::commands::list::list_partitions;
 use crate::cli::commands::metadata_saver::handle_metadata_extraction;
 use crate::cli::payload::extractor::extract_partitions;
@@ -21,7 +21,9 @@ use crate::cli::verification::validator::verify_extracted_partitions;
 use payload_dumper::utils::{format_elapsed_time, format_size};
 
 pub async fn run() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
+    args.user_agent
+        .get_or_insert_with(|| CLI_USER_AGENT.to_string());
 
     let is_stdout = args.out.to_string_lossy() == "-";
     let ui = UiOutput::new(args.quiet, is_stdout);

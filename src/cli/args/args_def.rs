@@ -5,6 +5,9 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+/// browser user agent used when --user-agent is not given
+pub const CLI_USER_AGENT: &str = env!("CLI_USER_AGENT");
+
 const VERSION_STRING: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     "\n\n",
