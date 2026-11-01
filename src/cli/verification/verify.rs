@@ -5,8 +5,8 @@
 use crate::cli::args::args_def::Args;
 use crate::cli::ui::ui_print::UiOutput;
 use anyhow::{Context, Result};
+use payload_dumper::format_size;
 use payload_dumper::structs::PartitionUpdate;
-use payload_dumper::utils::format_size;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use tokio::fs::{self, File};

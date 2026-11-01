@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::fs;
 
 use crate::cli::args::args_def::{Args, CLI_USER_AGENT};
@@ -18,7 +18,7 @@ use crate::cli::payload::payload_loader::load_payload;
 use crate::cli::payload::prefetch_extractor::extract_partitions_prefetch;
 use crate::cli::ui::ui_print::UiOutput;
 use crate::cli::verification::validator::verify_extracted_partitions;
-use payload_dumper::utils::{format_elapsed_time, format_size};
+use payload_dumper::format_size;
 
 pub async fn run() -> Result<()> {
     let mut args = Args::parse();
@@ -184,8 +184,8 @@ pub async fn run() -> Result<()> {
                         offset
                     } else {
                         // Fallback to reading offset from ZIP
-                        use payload_dumper::zip::core_parser::ZipParser;
-                        let http_reader = payload_dumper::http::HttpReader::new(
+                        use payload_dumper::ZipParser;
+                        let http_reader = payload_dumper::HttpReader::new(
                             url.clone(),
                             args.user_agent.as_deref(),
                             args.cookies.as_deref(),
@@ -277,4 +277,20 @@ pub async fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn format_elapsed_time(duration: Duration) -> String {
+    let total_secs = duration.as_secs();
+    let hours = total_secs / 3600;
+    let mins = (total_secs % 3600) / 60;
+    let secs = total_secs % 60;
+    let millis = duration.subsec_millis();
+
+    if hours > 0 {
+        format!("{}h {}m {}.{:03}s", hours, mins, secs, millis)
+    } else if mins > 0 {
+        format!("{}m {}.{:03}s", mins, secs, millis)
+    } else {
+        format!("{}.{:03}s", secs, millis)
+    }
 }

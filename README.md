@@ -178,7 +178,7 @@ Payload Dumper is modular. You can disable features you do not need to:
 If you only need local payload files and no network support:
 
 ```bash
-cargo build --release --no-default-features
+cargo build --release --no-default-features --features cli
 ```
 
 This:
@@ -233,6 +233,40 @@ export PAYLOAD_DUMPER_CUSTOM_DNS=8.8.8.8,4.4.4.4
 > If both are provided, the `--dns` flag takes precedence.
 ---
 If you are unsure, use the default build. 
+
+---
+
+## Using as a library
+
+The CLI and its dependencies sit behind the default `cli` feature. Turn off default
+features and enable only what you need:
+
+```toml
+[dependencies]
+payload_dumper = { version = "0.8", default-features = false, features = ["local_zip"] }
+```
+
+```rust
+let (manifest, data_offset, _zip) = payload_dumper::parse_local_zip_payload("ota.zip".into()).await?;
+for partition in &manifest.partitions {
+    println!("{}", partition.partition_name);
+}
+```
+
+Errors are returned as `payload_dumper::Error`, which can be matched on. The library
+does not install a global rustls crypto provider: it uses yours if one is installed
+and `ring` otherwise. It works on both current-thread and multi-thread tokio runtimes.
+
+| Feature | Default | Purpose |
+|---|---|---|
+| `cli` | yes | the `payload_dumper` binary |
+| `local_zip` | yes | read `payload.bin` from local OTA zips |
+| `remote_zip` | yes | HTTP(S) range reads of remote OTA zips |
+| `prefetch` | yes | download partition data before extracting |
+| `diff_ota` | yes | incremental (differential) OTA support |
+| `hickory_dns` | no | built-in DNS resolver for static builds |
+| `android-webpki-roots` | no | bundled CA roots on Android |
+| `regen_proto` | no | regenerate protobuf bindings (needs `protoc`) |
 
 ## Troubleshooting
 

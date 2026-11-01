@@ -223,7 +223,7 @@ jobs:
           fi
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} --all-features
+        run: cargo build --release --target ${{ matrix.target }} --features hickory_dns
         env:
           RUSTFLAGS: -C target-feature=+crt-static -C link-arg=-static -C link-arg=-no-pie
 

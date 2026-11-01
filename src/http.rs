@@ -196,9 +196,9 @@ async fn create_http_client(
 
 /// async HTTP reader with range request support
 pub struct HttpReader {
-    pub client: Client,
-    pub url: String,
-    pub content_length: u64,
+    pub(crate) client: Client,
+    pub(crate) url: String,
+    pub(crate) content_length: u64,
 }
 
 impl HttpReader {
@@ -266,6 +266,15 @@ impl HttpReader {
             context: format!("Failed to connect after {} retries", MAX_RETRIES),
             source: Box::new(last_error.expect("loop ran at least once").into()),
         })
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// total size of the remote file in bytes
+    pub fn content_length(&self) -> u64 {
+        self.content_length
     }
 
     /// read exact bytes at specific offset

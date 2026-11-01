@@ -2,8 +2,8 @@
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
 
+use payload_dumper::format_size;
 use payload_dumper::structs::DeltaArchiveManifest;
-use payload_dumper::utils::format_size;
 
 pub fn list_partitions(manifest: &DeltaArchiveManifest) {
     println!("{:<20} {:<15}", "Partition Name", "Size");

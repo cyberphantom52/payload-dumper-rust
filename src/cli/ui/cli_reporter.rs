@@ -21,7 +21,7 @@ impl CliExtractionReporter {
 // this implements the ProgressReporter trait from payload_dumper
 // the trait itself lives in the library, but this implementation
 // lives in this cli layer and uses cli-specific ui components
-impl payload_dumper::payload::payload_dumper::ProgressReporter for CliExtractionReporter {
+impl payload_dumper::ProgressReporter for CliExtractionReporter {
     fn on_start(&self, partition_name: &str, _total_operations: u64) {
         self.progress.set_message(partition_name.to_string());
         self.progress.set_position(0);
@@ -64,9 +64,9 @@ impl CliDownloadReporter {
 // the trait itself lives in the library, but this implementation
 // lives in the cli layer and uses cli-specific ui components
 #[cfg(feature = "prefetch")]
-impl payload_dumper::prefetch::DownloadProgressReporter for CliDownloadReporter {
+impl payload_dumper::DownloadProgressReporter for CliDownloadReporter {
     fn on_download_start(&self, partition_name: &str, total_bytes: u64) {
-        use payload_dumper::utils::format_size;
+        use payload_dumper::format_size;
         self.progress.set_message(format!(
             "Downloading {} [0 bytes/{}]",
             partition_name,
@@ -76,7 +76,7 @@ impl payload_dumper::prefetch::DownloadProgressReporter for CliDownloadReporter 
     }
 
     fn on_download_progress(&self, partition_name: &str, downloaded: u64, total: u64) {
-        use payload_dumper::utils::format_size;
+        use payload_dumper::format_size;
         let percent = (downloaded as f64 / total as f64 * 100.0) as u64;
 
         self.progress.set_message(format!(
@@ -89,7 +89,7 @@ impl payload_dumper::prefetch::DownloadProgressReporter for CliDownloadReporter 
     }
 
     fn on_download_complete(&self, partition_name: &str, total_bytes: u64) {
-        use payload_dumper::utils::format_size;
+        use payload_dumper::format_size;
         self.progress.finish_with_message(format!(
             "Downloaded {} [{}]",
             partition_name,

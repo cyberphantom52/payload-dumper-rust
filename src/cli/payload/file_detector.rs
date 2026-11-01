@@ -3,7 +3,7 @@
 // https://github.com/rhythmcache/payload-dumper-rust
 
 use anyhow::{Result, anyhow};
-use payload_dumper::utils::{FileType, detect_file};
+use payload_dumper::{FileType, detect_file};
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -32,7 +32,7 @@ async fn read_r_sn(
     dns: Option<&str>,
 ) -> Result<[u8; 4]> {
     use anyhow::Context;
-    use payload_dumper::http::HttpReader;
+    use payload_dumper::HttpReader;
 
     let http_reader = HttpReader::new(url.to_string(), user_agent, cookies, dns)
         .await

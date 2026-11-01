@@ -5,13 +5,15 @@
 use crate::error::Result;
 use crate::structs::*;
 use crate::utils::format_size;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use ahash::AHashMap as HashMap;
+use std::collections::HashSet;
+use std::hash::BuildHasher;
 
-pub async fn get_metadata(
+pub async fn get_metadata<S: BuildHasher>(
     manifest: &DeltaArchiveManifest,
     data_offset: u64,
     full_mode: bool,
-    filter_partitions: Option<&HashSet<&str>>,
+    filter_partitions: Option<&HashSet<&str, S>>,
     source_info: Option<SourceInfo>,
 ) -> Result<PayloadMetadata> {
     let mut partitions = Vec::new();

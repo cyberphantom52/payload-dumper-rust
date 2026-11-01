@@ -5,7 +5,6 @@
 use crate::constants::{PAYLOAD_MAGIC, ZIP_MAGIC};
 use crate::error::{Error, Result};
 use crate::structs::install_operation;
-use std::time::Duration;
 
 #[derive(Debug, PartialEq)]
 pub enum FileType {
@@ -24,22 +23,6 @@ pub fn detect_file(magic: &[u8; 4]) -> Result<FileType> {
     }
 
     Err(Error::UnknownFileType(*magic))
-}
-
-pub fn format_elapsed_time(duration: Duration) -> String {
-    let total_secs = duration.as_secs();
-    let hours = total_secs / 3600;
-    let mins = (total_secs % 3600) / 60;
-    let secs = total_secs % 60;
-    let millis = duration.subsec_millis();
-
-    if hours > 0 {
-        format!("{}h {}m {}.{:03}s", hours, mins, secs, millis)
-    } else if mins > 0 {
-        format!("{}m {}.{:03}s", mins, secs, millis)
-    } else {
-        format!("{}.{:03}s", secs, millis)
-    }
 }
 
 pub fn format_size(size: u64) -> String {

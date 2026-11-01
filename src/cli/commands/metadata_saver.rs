@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2025 rhythmcache
 // https://github.com/rhythmcache/payload-dumper-rust
-use ahash::AHashSet as HashSet;
 use anyhow::{Result, anyhow};
-use payload_dumper::metadata::get_metadata;
+use payload_dumper::get_metadata;
 use payload_dumper::structs::{DeltaArchiveManifest, SourceInfo};
+use std::collections::HashSet;
 use std::path::Path;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;

@@ -19,7 +19,7 @@ use tokio::io::AsyncRead;
 
 /// async payload reader for remote .bin files (not in ZIP)
 pub struct RemoteAsyncBinPayloadReader {
-    pub http_reader: Arc<HttpReader>,
+    pub(crate) http_reader: Arc<HttpReader>,
 }
 
 impl RemoteAsyncBinPayloadReader {

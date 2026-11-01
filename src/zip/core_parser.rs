@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::zip::zip_io::ZipIO;
 
 #[derive(Debug, Clone)]
-pub struct ZipEntry {
+pub(crate) struct ZipEntry {
     pub name: String,
     pub uncompressed_size: u64,
     pub compressed_size: u64,
@@ -32,7 +32,7 @@ pub struct ZipParser;
 
 impl ZipParser {
     /// find End of Central Directory record
-    pub async fn find_eocd<I: ZipIO>(io: &I) -> Result<(u64, u16)> {
+    pub(crate) async fn find_eocd<I: ZipIO>(io: &I) -> Result<(u64, u16)> {
         let file_size = io.size().await?;
 
         let max_comment_size = 65535;
@@ -80,7 +80,7 @@ impl ZipParser {
     }
 
     /// read ZIP64 EOCD information
-    pub async fn read_zip64_eocd<I: ZipIO>(io: &I, eocd_offset: u64) -> Result<(u64, u64)> {
+    pub(crate) async fn read_zip64_eocd<I: ZipIO>(io: &I, eocd_offset: u64) -> Result<(u64, u64)> {
         if eocd_offset < 20 {
             return Err(Error::InvalidZip("Invalid ZIP64 structure".into()));
         }
@@ -152,7 +152,7 @@ impl ZipParser {
     }
 
     /// get central directory offset and number of entries
-    pub async fn get_central_directory_info<I: ZipIO>(io: &I) -> Result<(u64, usize)> {
+    pub(crate) async fn get_central_directory_info<I: ZipIO>(io: &I) -> Result<(u64, usize)> {
         let (eocd_offset, num_entries) = Self::find_eocd(io).await?;
 
         let mut cd_offset_buf = [0u8; 4];
@@ -168,7 +168,7 @@ impl ZipParser {
     }
 
     /// read a single central directory entry
-    pub async fn read_central_directory_entry<I: ZipIO>(
+    pub(crate) async fn read_central_directory_entry<I: ZipIO>(
         io: &I,
         offset: u64,
     ) -> Result<(ZipEntry, u64)> {
@@ -291,7 +291,7 @@ impl ZipParser {
     }
 
     /// find payload.bin entry in ZIP central directory
-    pub async fn find_payload_entry<I: ZipIO>(io: &I) -> Result<ZipEntry> {
+    pub(crate) async fn find_payload_entry<I: ZipIO>(io: &I) -> Result<ZipEntry> {
         let (cd_offset, num_entries) = Self::get_central_directory_info(io).await?;
         let mut current_offset = cd_offset;
 
@@ -315,7 +315,7 @@ impl ZipParser {
     }
 
     /// calculate the actual data offset for a ZIP entry (after local header)
-    pub async fn get_data_offset<I: ZipIO>(io: &I, entry: &ZipEntry) -> Result<u64> {
+    pub(crate) async fn get_data_offset<I: ZipIO>(io: &I, entry: &ZipEntry) -> Result<u64> {
         let mut local_header = [0u8; 30];
         io.read_at(entry.offset, &mut local_header).await?;
 
@@ -341,7 +341,7 @@ impl ZipParser {
     }
 
     /// verify payload magic at given offset
-    pub async fn verify_payload_magic<I: ZipIO>(io: &I, offset: u64) -> Result<()> {
+    pub(crate) async fn verify_payload_magic<I: ZipIO>(io: &I, offset: u64) -> Result<()> {
         let mut magic = [0u8; 4];
         io.read_at(offset, &mut magic).await?;
 

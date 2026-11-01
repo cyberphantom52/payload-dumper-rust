@@ -7,24 +7,24 @@ use crate::cli::payload::file_detector::PayloadType;
 use crate::cli::ui::ui_print::UiOutput;
 use anyhow::Result;
 use anyhow::anyhow;
-use payload_dumper::payload::payload_dumper::AsyncPayloadRead;
-use payload_dumper::payload::payload_parser::parse_local_payload;
+use payload_dumper::AsyncPayloadRead;
+use payload_dumper::LocalAsyncPayloadReader;
 #[cfg(feature = "local_zip")]
-use payload_dumper::payload::payload_parser::parse_local_zip_payload_ext;
+use payload_dumper::LocalAsyncZipPayloadReader;
 #[cfg(feature = "remote_zip")]
-use payload_dumper::payload::payload_parser::{parse_remote_bin_payload, parse_remote_payload_ext};
-use payload_dumper::readers::local_reader::LocalAsyncPayloadReader;
+use payload_dumper::RemoteAsyncBinPayloadReader;
+#[cfg(feature = "remote_zip")]
+use payload_dumper::RemoteAsyncZipPayloadReader;
+use payload_dumper::parse_local_payload;
 #[cfg(feature = "local_zip")]
-use payload_dumper::readers::local_zip_reader::LocalAsyncZipPayloadReader;
-#[cfg(feature = "remote_zip")]
-use payload_dumper::readers::remote_bin_reader::RemoteAsyncBinPayloadReader;
-#[cfg(feature = "remote_zip")]
-use payload_dumper::readers::remote_zip_reader::RemoteAsyncZipPayloadReader;
+use payload_dumper::parse_local_zip_payload_ext;
 use payload_dumper::structs::{DeltaArchiveManifest, SourceInfo, ZipDetails};
+#[cfg(feature = "remote_zip")]
+use payload_dumper::{parse_remote_bin_payload, parse_remote_payload_ext};
 
-use payload_dumper::utils::format_size;
 #[cfg(any(feature = "local_zip", feature = "remote_zip"))]
-use payload_dumper::zip::core_parser::ZipMetadataInfo;
+use payload_dumper::ZipMetadataInfo;
+use payload_dumper::format_size;
 use std::path::Path;
 use std::sync::Arc;
 

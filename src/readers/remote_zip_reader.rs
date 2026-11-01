@@ -14,7 +14,7 @@ use tokio::io::AsyncRead;
 
 /// async payload reader for remote ZIP files
 pub struct RemoteAsyncZipPayloadReader {
-    pub http_reader: Arc<HttpReader>,
+    pub(crate) http_reader: Arc<HttpReader>,
     payload_offset: u64,
     payload_size: u64,
 }
