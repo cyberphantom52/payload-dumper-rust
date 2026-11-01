@@ -7,7 +7,6 @@ use crate::constants::DEFAULT_USER_AGENT;
 use anyhow::{Result, anyhow};
 use futures_util::StreamExt;
 use reqwest::{Client, header};
-use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -69,17 +68,53 @@ async fn get_or_init_dns_resolver(
     Ok(GLOBAL_DNS_RESOLVER.get_or_init(|| resolver.clone()).clone())
 }
 
+/// build the rustls config for the HTTP client without touching the
+/// process-wide default crypto provider. if the application has installed
+/// one, it is used. otherwise ring is used for this client only.
+fn build_tls_config() -> Result<rustls::ClientConfig> {
+    use std::sync::Arc;
+
+    let provider = rustls::crypto::CryptoProvider::get_default()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
+
+    let builder = rustls::ClientConfig::builder_with_provider(Arc::clone(&provider))
+        .with_safe_default_protocol_versions()
+        .map_err(|e| anyhow!("Failed to configure TLS: {}", e))?;
+
+    // on android, rustls platform verifier requires JNI init with a JavaVM
+    // context which isn't available in standalone CLI binaries (e.g. Termux)
+    // and adds unnecessary complexity for library consumers that don't need
+    // real system trust store integration. bypass it with bundled webpki roots
+    // instead when the "android-webpki-roots" feature is enabled.
+    #[cfg(all(target_os = "android", feature = "android-webpki-roots"))]
+    let builder = {
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        builder.with_root_certificates(root_store)
+    };
+
+    #[cfg(not(all(target_os = "android", feature = "android-webpki-roots")))]
+    let builder = {
+        let verifier = rustls_platform_verifier::Verifier::new(provider)
+            .map_err(|e| anyhow!("Failed to load platform certificate verifier: {}", e))?;
+        builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(verifier))
+    };
+
+    let mut config = builder.with_no_client_auth();
+    // reqwest does not set ALPN on a preconfigured config, so advertise h2 here
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    Ok(config)
+}
+
 /// HTTP client
 async fn create_http_client(
     user_agent: Option<&str>,
     cookies: Option<&str>,
     dns: Option<&str>,
 ) -> Result<Client> {
-    static INIT_CRYPTO: Once = Once::new();
-    INIT_CRYPTO.call_once(|| {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    });
-
     let mut headers = header::HeaderMap::new();
 
     let ua = user_agent.unwrap_or(DEFAULT_USER_AGENT);
@@ -110,22 +145,7 @@ async fn create_http_client(
         .default_headers(headers)
         .redirect(reqwest::redirect::Policy::limited(10));
 
-    // on android, rustls platform verifier requires JNI init with a JavaVM
-    // context which isn't available in standalone CLI binaries (e.g. Termux)
-    // and adds unnecessary complexity for library consumers that don't need
-    // real system trust store integration. bypass it with bundled webpki roots
-    // instead when the "android-webpki-roots" feature is enabled.
-    #[cfg(all(target_os = "android", feature = "android-webpki-roots"))]
-    {
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-        let tls_config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-
-        client_builder = client_builder.use_preconfigured_tls(tls_config);
-    }
+    client_builder = client_builder.tls_backend_preconfigured(build_tls_config()?);
 
     // use custom DNS resolver when feature is enabled
     #[cfg(feature = "hickory_dns")]

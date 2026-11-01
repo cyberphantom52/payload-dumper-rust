@@ -67,6 +67,7 @@ rustls = { version = "0.23", features = [
 ], default-features = false, optional = true }
 digest = { version = "0.11", optional = true }
 sha2 = { version = "0.11", optional = true }
+rustls-platform-verifier = { version = "0.7", optional = true }
 lz4diff = { version = "0.1", optional = true }
 webpki-roots = { version = "1.0.11", optional = true }
 
@@ -93,7 +94,13 @@ cli = [
     "tokio/io-std",
 ]
 local_zip = []
-remote_zip = ["local_zip", "dep:tokio-util", "dep:reqwest", "dep:rustls"]
+remote_zip = [
+    "local_zip",
+    "dep:tokio-util",
+    "dep:reqwest",
+    "dep:rustls",
+    "dep:rustls-platform-verifier",
+]
 hickory_dns = [
     "remote_zip",
     "dep:hickory-resolver",
