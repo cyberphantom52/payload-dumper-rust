@@ -76,13 +76,14 @@ webpki-roots = { version = "1.0.11", optional = true }
 tokio = { version = "1.53", features = ["macros", "rt"] }
 
 [build-dependencies]
-chrono      = "0.4"
-prost-build = "0.14"
+chrono      = { version = "0.4", optional = true }
+prost-build = { version = "0.14", optional = true }
 
 [features]
 default = ["cli", "local_zip", "remote_zip", "prefetch", "diff_ota"]
 cli = [
     "dep:anyhow",
+    "dep:chrono",
     "dep:clap",
     "dep:indicatif",
     "dep:num_cpus",
@@ -112,6 +113,8 @@ hickory_dns = [
 diff_ota = ["dep:bsdiff-android", "dep:puffdiff", "dep:lz4diff"]
 prefetch = ["remote_zip", "dep:tempfile"]
 android-webpki-roots = ["dep:webpki-roots"]
+# regenerate src/chromeos_update_engine.rs from the .proto (needs protoc)
+regen_proto = ["dep:prost-build"]
 
 [profile.release]
 opt-level     = 3

@@ -5,11 +5,26 @@
 // This file is part of payload-dumper-rust. It implements components used for
 // extracting and processing Android OTA payloads.
 
-use std::env;
-use std::path::Path;
+#[cfg(feature = "cli")]
 use std::process::Command;
 
 fn main() {
+    // without this cargo reruns the script whenever any package file changes
+    println!("cargo:rerun-if-changed=build.rs");
+
+    #[cfg(feature = "cli")]
+    emit_cli_build_info();
+
+    #[cfg(feature = "remote_zip")]
+    emit_default_user_agent();
+
+    #[cfg(feature = "regen_proto")]
+    compile_protos();
+}
+
+/// version info shown by the CLI's --version output
+#[cfg(feature = "cli")]
+fn emit_cli_build_info() {
     let build_time = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S UTC")
         .to_string();
@@ -56,22 +71,22 @@ fn main() {
 
     let mut features = Vec::new();
 
-    if env::var("CARGO_FEATURE_REMOTE_ZIP").is_ok() {
+    if std::env::var("CARGO_FEATURE_REMOTE_ZIP").is_ok() {
         features.push("remote_zip");
     }
-    if env::var("CARGO_FEATURE_LOCAL_ZIP").is_ok() {
+    if std::env::var("CARGO_FEATURE_LOCAL_ZIP").is_ok() {
         features.push("local_zip");
     }
-    if env::var("CARGO_FEATURE_DIFF_OTA").is_ok() {
+    if std::env::var("CARGO_FEATURE_DIFF_OTA").is_ok() {
         features.push("diff_ota");
     }
-    if env::var("CARGO_FEATURE_HICKORY_DNS").is_ok() {
+    if std::env::var("CARGO_FEATURE_HICKORY_DNS").is_ok() {
         features.push("hickory_dns");
     }
-    if env::var("CARGO_FEATURE_PREFETCH").is_ok() {
+    if std::env::var("CARGO_FEATURE_PREFETCH").is_ok() {
         features.push("prefetch");
     }
-    if env::var("CARGO_FEATURE_ANDROID_WEBPKI_ROOTS").is_ok() {
+    if std::env::var("CARGO_FEATURE_ANDROID_WEBPKI_ROOTS").is_ok() {
         features.push("android-webpki-roots");
     }
     let features_str = if features.is_empty() {
@@ -83,21 +98,22 @@ fn main() {
 
     println!(
         "cargo:rustc-env=BUILD_TARGET={}",
-        env::var("TARGET").unwrap()
+        std::env::var("TARGET").unwrap()
     );
 
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string());
+    let target_arch =
+        std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string());
     println!("cargo:rustc-env=TARGET_ARCH={}", target_arch);
 
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| "unknown".to_string());
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| "unknown".to_string());
     println!("cargo:rustc-env=TARGET_OS={}", target_os);
 
     println!(
         "cargo:rustc-env=BUILD_PROFILE={}",
-        env::var("PROFILE").unwrap()
+        std::env::var("PROFILE").unwrap()
     );
 
-    let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "unknown".to_string());
+    let opt_level = std::env::var("OPT_LEVEL").unwrap_or_else(|_| "unknown".to_string());
     println!("cargo:rustc-env=OPT_LEVEL={}", opt_level);
 
     let rustc_version = Command::new("rustc")
@@ -114,8 +130,17 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=RUSTC_VERSION={}", rustc_version);
 
-    let build_host = env::var("HOST").unwrap_or_else(|_| "unknown".to_string());
+    let build_host = std::env::var("HOST").unwrap_or_else(|_| "unknown".to_string());
     println!("cargo:rustc-env=BUILD_HOST={}", build_host);
+
+    if std::path::Path::new(".git/HEAD").exists() {
+        println!("cargo:rerun-if-changed=.git/HEAD");
+    }
+}
+
+#[cfg(feature = "remote_zip")]
+fn emit_default_user_agent() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
     // set platform specific default user agent
     let default_user_agent = match target_os.as_str() {
@@ -139,76 +164,24 @@ fn main() {
         } // fallback to Linux
     };
     println!("cargo:rustc-env=DEFAULT_USER_AGENT={}", default_user_agent);
-
-    if std::path::Path::new(".git/HEAD").exists() {
-        println!("cargo:rerun-if-changed=.git/HEAD");
-    }
-
-    // Protobuf compilation
-    compile_protos();
 }
 
+/// regenerate the protobuf bindings from proto/update_metadata.proto.
+/// normal builds use the checked-in src/chromeos_update_engine.rs, copy the
+/// generated file over it after changing the .proto
+#[cfg(feature = "regen_proto")]
 fn compile_protos() {
     let proto_file = "proto/update_metadata.proto";
-    let proto_path = Path::new(proto_file);
-    let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
-    let out_file = Path::new(&out_dir).join("chromeos_update_engine.rs");
-    let precompiled = Path::new("src/chromeos_update_engine.rs");
-
-    // Check if proto file exists
-    if !proto_path.exists() {
-        println!(
-            "cargo:warning=Proto file not found at {}, using pre-compiled version",
-            proto_file
-        );
-        copy_precompiled_to_out(precompiled, &out_file);
-        return;
-    }
-
-    // Check if protoc is available
-    let protoc_available = Command::new("protoc")
-        .arg("--version")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
-
-    if !protoc_available {
-        println!("cargo:warning=protoc command not found, using pre-compiled version");
-        copy_precompiled_to_out(precompiled, &out_file);
-        return;
-    }
-
-    // Both proto file and protoc exist, proceed with compilation
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     println!("cargo:rerun-if-changed={}", proto_file);
 
-    match prost_build::Config::new()
+    prost_build::Config::new()
         .out_dir(&out_dir)
         .compile_protos(&[proto_file], &["proto/"])
-    {
-        Ok(_) => {
-            println!(
-                "cargo:warning=Successfully compiled protobuf to {}/chromeos_update_engine.rs",
-                out_dir
-            );
-        }
-        Err(e) => {
-            println!(
-                "cargo:warning=Failed to compile protobuf: {}. Using pre-compiled version.",
-                e
-            );
-            copy_precompiled_to_out(precompiled, &out_file);
-        }
-    }
-}
+        .expect("Failed to compile protobuf (is protoc installed?)");
 
-fn copy_precompiled_to_out(precompiled: &Path, out_file: &Path) {
-    if precompiled.exists() {
-        if let Err(e) = std::fs::copy(precompiled, out_file) {
-            panic!("Failed to copy pre-compiled protobuf file: {}", e);
-        } else {
-            println!("cargo:warning=Copied pre-compiled protobuf to OUT_DIR");
-        }
-    } else {
-        panic!("Neither protoc nor pre-compiled protobuf file found!");
-    }
+    println!(
+        "cargo:warning=Generated protobuf bindings at {}/chromeos_update_engine.rs",
+        out_dir
+    );
 }

@@ -69,7 +69,9 @@ pub mod install_operation {
     pub enum Type {
         Replace = 0,
         ReplaceBz = 1,
+        #[deprecated]
         Move = 2,
+        #[deprecated]
         Bsdiff = 3,
         SourceCopy = 4,
         SourceBsdiff = 5,
@@ -92,7 +94,9 @@ pub mod install_operation {
             match self {
                 Self::Replace => "REPLACE",
                 Self::ReplaceBz => "REPLACE_BZ",
+                #[allow(deprecated)]
                 Self::Move => "MOVE",
+                #[allow(deprecated)]
                 Self::Bsdiff => "BSDIFF",
                 Self::SourceCopy => "SOURCE_COPY",
                 Self::SourceBsdiff => "SOURCE_BSDIFF",
@@ -112,8 +116,8 @@ pub mod install_operation {
             match value {
                 "REPLACE" => Some(Self::Replace),
                 "REPLACE_BZ" => Some(Self::ReplaceBz),
-                "MOVE" => Some(Self::Move),
-                "BSDIFF" => Some(Self::Bsdiff),
+                "MOVE" => Some(#[allow(deprecated)] Self::Move),
+                "BSDIFF" => Some(#[allow(deprecated)] Self::Bsdiff),
                 "SOURCE_COPY" => Some(Self::SourceCopy),
                 "SOURCE_BSDIFF" => Some(Self::SourceBsdiff),
                 "REPLACE_XZ" => Some(Self::ReplaceXz),
