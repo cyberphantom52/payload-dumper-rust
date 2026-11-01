@@ -39,13 +39,7 @@ hex = "0.4"
 clap = { version = "4.6", features = ["derive"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
-tokio = { version = "1.53", features = [
-    "rt",
-    "rt-multi-thread",
-    "io-util",
-    "time",
-    "full",
-] }
+tokio = { version = "1.53", features = ["fs", "io-util", "rt", "time"] }
 futures = "0.3"
 async-compression = { version = "0.4", features = [
     "zstd",
@@ -76,6 +70,9 @@ sha2 = { version = "0.11", optional = true }
 lz4diff = { version = "0.1", optional = true }
 webpki-roots = { version = "1.0.11", optional = true }
 
+[dev-dependencies]
+tokio = { version = "1.53", features = ["macros", "rt"] }
+
 [build-dependencies]
 chrono      = "0.4"
 prost-build = "0.14"
@@ -90,6 +87,10 @@ cli = [
     "dep:sha2",
     "dep:digest",
     "dep:once_cell",
+    "tokio/macros",
+    "tokio/rt-multi-thread",
+    "tokio/sync",
+    "tokio/io-std",
 ]
 local_zip = []
 remote_zip = ["local_zip", "dep:tokio-util", "dep:reqwest", "dep:rustls"]
